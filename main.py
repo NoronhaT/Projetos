@@ -1,72 +1,208 @@
+from __future__ import print_function
+import time
+import acessos
+import sys
+from pywinauto import application
+from acessos import *
+import yagmail
+from datetime import datetime
 import pandas as pd
-import datetime
-import os
+import gspread
+import pyautogui as py
 
-now =datetime.date.today()
-dia =now.strftime("%m") + now.strftime("%Y")
 
-# COLAB
-df_tab = pd.read_excel("rh_mensal.xls")
-index = df_tab.index
-nb_row = len(index)
-new_ind = nb_row-43 # atenção ao dias do mes 46 para mes com 31, 45 para meses com 30 dias
-contador =0
 
-while nb_row != 54: #sempre checar a distancia entre os blocos de colaboradores
-    index = df_tab.index
-    nb_row = len(index)-contador
-    colaborador = df_tab.iat[7+contador, 1] #nome do colaborador
-    funcao = df_tab.iat[9+contador, 1]
-    print(colaborador)
-    headers = df_tab.iloc[13+contador]
+# INICIO
 
-    new_df = pd.DataFrame(df_tab.values[15+contador:], columns=headers)
-    print(new_df.head())
-    df_new = new_df[:-new_ind+contador]
-    contador+= 55 #distancia entre os elementos necessarios para criação da tabela (O SEGREDO É ESSE CARA AQUI)
-    df_new["COLABORADOR"] = colaborador
-    df_new["FUNÇÃO"] = funcao
-    df = df_new.replace('Folga', ' ')
-    df_new = df.replace(['NaN'], ' ')
-    df_new.to_excel(r'C:\Users\Micro\PycharmProjects\rh_mensal\colaborador{0}.xlsx'.format(colaborador + "10-21"),
-                    index=False)
-    data_final = pd.DataFrame()
-    for files in os.listdir("C:\\Users\\Micro\\PycharmProjects\\rh_mensal"):
-        if files.endswith('10-21.xlsx'):
-            data = pd.read_excel(files, index_col=None)
-            data_final = data_final.append(data)
-            data_remv = data_final.replace('COVID 1', ' ')
-            data_abo = data_remv.replace('Abonado', ' ')
-            data_atr = data_abo.replace('Atraso', ' ')
-            data_ext = data_atr.replace('ServExt', ' ')
-            data_esq = data_ext.replace('Esquec.', ' ')
-            data_mtu = data_esq.replace('Mud Tur', ' ')
-            data_sai = data_mtu.replace('Saí AJ', ' ')
-            data_acm = data_sai.replace('AcComp', ' ')
-            data_hex = data_acm.replace('H.Extra', ' ')
-            data_fer = data_hex.replace('Feriado', ' ')
-            data_fes = data_fer.replace('Férias', ' ')
-            data_grv = data_fes.replace('Greve', ' ')
-            data_faj = data_grv.replace('Falta J', ' ')
-            fata_com = data_faj.replace('Compens', ' ')
-            data_dia = fata_com.replace('At.Dia', ' ')
-            fata_inj = data_dia.replace('FaltaIn', ' ')
-            ant_fer = fata_inj.replace('Ant Fer', ' ')
-            atn_jus = ant_fer.replace('At.Just', ' ')
-            bh_hor = atn_jus.replace('B.Horas', ' ')
-            part_sai = bh_hor.replace('Particu', ' ')
-            ast_rev = part_sai.replace('\*', '', regex=True)
-            atr_jus = ast_rev.replace('AtrasoJ', ' ')
-            atr_aco = atr_jus.replace('At.Acom', ' ')
-            atr_aco.to_excel(r'C:\Users\Micro\PycharmProjects\rh_mensal\relatorio{0}.xlsx'.format("10-21"),
-                             index=False)
+now = datetime.now()
+current_time = now.strftime("%H:%M:%S")
+print("HORA DE INÍCIO =", current_time)
 
-    data_final_dois = pd.DataFrame()
-    for files in os.listdir("C:\\Users\\Micro\\PycharmProjects\\rh_mensal"):
-        if files.startswith('relat'):
-            dataf = pd.read_excel(files, index_col=None)
-            data_final_dois = data_final_dois.append(dataf)
-            data_remv_dois = data_final_dois.replace('Av.Prev', ' ')
-            data_remv_dois.to_excel(r'C:\Users\Micro\PycharmProjects\rh_mensal\resumo{0}.xlsx'.format("-Unificado"),
-                                    index=False)
+# MENSAGENS AO USER
+print("Iniciando a rotina de atualização dos indicadores por automação...")
+time.sleep(2)
+print("Carregando a rotina...")
+time.sleep(2)
+print("Para esta interação é importante não mexer no computador durante o processo, para evitar erros.")
+time.sleep(5)
+print("Limpando DESKTOP")
+py.click(1439, 889)
+print("Acessando MaxGPS")
+time.sleep(2)
 
+# ABRE O MAX GPS
+app = application.Application()
+app.start("L:\MaxGPS\MaxGPS.exe")
+time.sleep(10)
+
+for restante in range(20, 0, -1):
+    sys.stdout.write("\r")
+    sys.stdout.write("{:2d} segundos restantes.".format(restante))
+    sys.stdout.flush()
+    time.sleep(1)
+sys.stdout.write("\rINSERINDO LOGIN E SENHA!            \n")
+
+py.click(839, 372)
+py.typewrite(acessos.nome)
+py.typewrite(['tab'])
+py.click(839, 407)
+py.typewrite(acessos.senha)
+py.typewrite(['enter'])
+
+time.sleep(1)
+print("ACESSO AO SISTEMA CONCEDIDO")
+time.sleep(1)
+print("AGUARDE")
+
+for restante in range(10, 0, -1):
+    sys.stdout.write("\r")
+    sys.stdout.write("{:2d} segundos restantes.".format(restante))
+    sys.stdout.flush()
+    time.sleep(1)
+
+# --------------------------------------------------------------#
+# RELATÓRIO DE VENDAS
+
+sys.stdout.write("\rPREPARANDO RELATÓRIO DE VENDAS!            \n")
+py.click(65,108)
+py.sleep(5)
+
+# PASSA AS ABAS DE ACORDO COM O MÊS ATUAL:
+for contagem in range(mes_atual, 0, -1):
+    py.click(45, 186)
+
+py.sleep(3)
+py.click(447,82)
+
+print("GERANDO RELATÓRIO")
+
+# RELATORIO DE CONTROLE DE ENTREGAS E F.E
+
+py.click(57,182)
+py.sleep(2)
+py.click(378,41)
+py.sleep(2)
+py.click(556,90)
+py.sleep(10)
+py.click(363,9)
+py.sleep(2)
+py.hotkey('down')
+py.sleep(2)
+py.hotkey('enter')
+py.sleep(2)
+
+# TEMPO DE ESPERA DO RELATÓRIO
+print("GERANDO RELATÓRIO: POR FAVOR AGUARDE!")
+
+for restante in range(300, 0, -1):
+    sys.stdout.write("\r")
+    sys.stdout.write("{:2d} segundos restantes.".format(restante))
+    sys.stdout.flush()
+    time.sleep(1)
+
+# SALVANDO RELATÓRIO DE FATURAMENTO
+print("ARQUIVO SENDO SALVO - AGUARDE!")
+py.hotkey('ctrl','s')
+py.sleep(5)
+py.typewrite("C:\\Users\Micro\\Desktop\\dados de faturamento - 2021 - REL. VENDAS-EXP-CONTROLE DE ENTREGAS.xlsx")
+py.sleep(2)
+py.hotkey('enter')
+py.sleep(2)
+py.hotkey('left')
+py.sleep(2)
+py.hotkey('enter')
+py.sleep(5)
+
+# SALVANDO RELATÓRIO DE F.E
+print("INICIANDO RELATÓRIO F.E - AGUARDE")
+
+py.click(736,91)
+
+for restante in range(250, 0, -1):
+    sys.stdout.write("\r")
+    sys.stdout.write("{:2d} segundos restantes.".format(restante))
+    sys.stdout.flush()
+    time.sleep(1)
+
+py.click(360,8)
+py.sleep(2)
+py.hotkey('down')
+py.sleep(2)
+py.hotkey('enter')
+py.sleep(2)
+
+# SALVANDO F.E
+print("ARQUIVO SENDO SALVO - AGUARDE!")
+py.hotkey('ctrl','s')
+py.sleep(5)
+py.typewrite("C:\\Users\Micro\\Desktop\\faturamento por FE.xlsx")
+py.sleep(2)
+py.hotkey('enter')
+py.sleep(2)
+py.hotkey('left')
+py.sleep(2)
+py.hotkey('enter')
+py.sleep(5)
+
+# FECHA O MAXGPS
+
+py.hotkey('Alt','F4')
+
+
+print("INICIANDO O GSPREAD PARA O GOOGLE DRIVE - VOCÊ JÁ PODE MEXER NO COMPUTADOR NORMALMENTE")
+
+
+# INICIA GSPREAD
+
+#LOCALIZAÇÃO DA PLANILHA
+
+gc = gspread.service_account()
+sh = gc.open_by_url("https://docs.google.com/spreadsheets/d/1KMV-oR6MbUv5fdswz6VskfqpvFdsFLJtUZMMZfpkc9Q")
+# PLANILHA DO DRIVE
+worksheet = sh.worksheet("FAT")
+
+# DATA FRAME FAT
+doc_fat = pd.read_excel("C:\\Users\Micro\\Desktop\\dados de faturamento - 2021 - REL. VENDAS-EXP-CONTROLE DE ENTREGAS.xlsx")
+df = pd.DataFrame(doc_fat)
+df['Data Entrega'] = df['Data Entrega'].astype(str)
+df = df.fillna("0")
+df.to_excel(r'C:\\Users\\Micro\\PycharmProjects\\interfacebotnf\\faturamento.xlsx', index= False)
+
+# ATUALIZA O DRIVE
+new_ds = worksheet.update([df.columns.values.tolist()] + df.values.tolist())
+
+
+
+
+# DATA FRAME FE
+doc_fat_dois = pd.read_excel("C:\\Users\Micro\\Desktop\\faturamento por FE.xlsx")
+df_dois = pd.DataFrame(doc_fat_dois)
+df_dois['Data'] = df_dois['Data'].astype(str)
+df_dois = df_dois.fillna("0")
+df_dois.to_excel(r'C:\\Users\\Micro\\PycharmProjects\\interfacebotnf\\faturamento por FE.xlsx', index= False)
+
+# ATUALIZA O DRIVE
+
+worksheet = sh.worksheet("FE")
+
+new_ds_dois = worksheet.update([df_dois.columns.values.tolist()] + df_dois.values.tolist())
+print("Relatório concluído com SUCESSO!")
+
+
+
+
+# EMAIL COM AVISO DA ATUALIZAÇÃO
+
+yagmail.register(username, password)
+yag = yagmail.SMTP(username)
+
+yag.send(to=['si@rhowert.com.br'],
+         subject="RELATÓRIO DE FATURAMENTO - DIÁRIO",
+         contents="Bom dia! Os dados  de faturamento foram atualizados de maneira automática com sucesso" + " as: " + current_time + "\n Acesse o Link para "
+                                                                                               "vizualização:" + "\n "
+                                                                                                                 "https://datastudio.google.com/reporting/75597fee-6497-4a0b-b4ba-4e836d858dcf/page/p_quaxvwnvoc")
+# FIM
+
+now = datetime.now()
+current_time = now.strftime("%H:%M:%S")
+print("HORA DE INÍCIO =", current_time)
