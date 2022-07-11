@@ -1,0 +1,48 @@
+import jaydebeapi
+import pandas as pd
+import numpy as np
+
+conn = jaydebeapi.connect("com.pervasive.jdbc.v2.Driver", "jdbc:pervasive://rhwt001s:1583/RHOWERTGPS",
+                          {"user": "*****", "password": "****"}, "pervasive_jdbc.jar")
+curs = conn.cursor()
+curs.execute(
+    "select code_ressource_op, piece_op,Num_Bon, Num_Affaire,of_op, num_op, qt_term_op, Date_Debut, Operateur, Date_Debut,Sec_cent_Debut, H_min_Debut, Id_Multi_Bon, code_ressource_op from of_phase2 A inner join sca B on A.Num_Bon = B.Bon")
+
+
+df = pd.DataFrame(curs.fetchall(),
+                  columns=['recurso_op','produto_op','numero_Ficha', 'numero_Pedido', 'item_op', 'numero_operacao', 'quantidade_terminada',
+                           'data_início', 'operador', 'Data', 'Segundos_hm', 'Hora_minuto', 'Multificha', 'Recurso'])
+
+
+df.Hora_minuto = pd.to_numeric(df.Hora_minuto, errors='coerce').fillna(0).astype(np.int64)
+df.Segundos_hm = pd.to_numeric(df.Segundos_hm, errors='coerce').fillna(0).astype(np.int64)
+df.quantidade_terminada = pd.to_numeric(df.quantidade_terminada, errors='coerce').fillna(0).astype(np.int64)
+
+# Definindo horas_minutos
+
+new_df = df.assign(Hora_Conv = lambda x: x.Hora_minuto /256)
+new_df_dois = new_df.assign(Minutos_Conv = lambda  x: x.Hora_Conv )
+new_df_dois.Hora_Conv = new_df_dois['Hora_Conv'].astype(int)
+new_df_tres = new_df_dois.assign(Minutos_Dec = lambda  x: (x.Minutos_Conv - x.Hora_Conv) * 256)
+new_df_tres.Minutos_Dec = new_df_tres['Minutos_Dec'].astype(int)
+
+#Definindo segundos
+
+df_format = new_df_tres.assign(Segundos_Conv = lambda x: x.Segundos_hm / 16777216)
+df_format.Segundos_Conv = df_format['Segundos_Conv'].astype(int)
+
+df_format.Hora_Conv = df_format.Hora_Conv.astype(str)
+df_format.Minutos_Dec = df_format.Minutos_Dec.astype(str)
+df_format.Segundos_Conv = df_format.Segundos_Conv.astype(str)
+
+#Criando coluna de tempo calculado:
+
+df_format = df_format.assign(Hora_Prod = df_format['Data'] + ' ' + df_format.Hora_Conv + ':' + df_format.Minutos_Dec + ':' + df_format.Segundos_Conv)
+df_format['Hora_Prod'] = pd.to_datetime(df_format['Hora_Prod'],format='%Y/%m/%d %H:%M:%S')
+print(df_format.head(5))
+
+
+
+
+# SEMPRE FECHAR CONEXAO COM O BANCO
+conn.close()
