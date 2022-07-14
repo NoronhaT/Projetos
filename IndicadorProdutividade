@@ -2,7 +2,7 @@ import jaydebeapi
 import pandas as pd
 import numpy as np
 
-conn = jaydebeapi.connect("com.pervasive.jdbc.v2.Driver", "jdbc:pervasive://rhwt001s:1583/RHOWERTGPS",
+conn = jaydebeapi.connect("com.pervasive.jdbc.v2.Driver", "jdbc:pervasive://"ENDEREÇO DO SEU SERVIDOR AQUI",
                           {"user": "*****", "password": "****"}, "pervasive_jdbc.jar")
 curs = conn.cursor()
 curs.execute(
@@ -44,5 +44,5 @@ print(df_format.head(5))
 
 
 
-# SEMPRE FECHAR CONEXAO COM O BANCO
+# SEMPRE FECHE SUA CONEXAO COM O BANCO
 conn.close()
