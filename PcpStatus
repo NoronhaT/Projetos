@@ -1,0 +1,49 @@
+import jaydebeapi
+import pandas as pd
+import numpy as np
+from datetime import datetime
+import gspread
+
+
+pervasive_driver ="pervasive_jdbc.jar"
+conn = jaydebeapi.connect("com.pervasive.jdbc.v2.Driver", "jdbc:pervasive://***/*****",
+                          {"user": "****", "password": "****"}, pervasive_driver)
+curs = conn.cursor()
+curs.execute("select * from OF_PIECE_NOM2 A inner join of_phase2 B on A.affaire = B.Num_Affaire AND A.nomenclature=B.piece_op")
+
+# DADOS OFPHASE
+field_names = [i[0] for i in curs.description ]
+df = pd.DataFrame(curs.fetchall(),columns=field_names)
+df = df.applymap(lambda x: x.encode('unicode_escape').decode('utf-8') if isinstance(x,str) else x) #remove caracteres ilegais
+df = df.drop(columns=['debut_planif_op','PMA_Initial','utilise_of_pie','lien_op', 'op_time_op', 'date_maj_op', 'visa_op', 'modif_op', 'etap_res_of_pie', 'qte_mini_of_pie','user_lance_of_pie', 'flag_lance_of_pie', 'qte_reserve_of_pie', 'qte_sortie_of_pie', 'qte_livre_of_pie', 'ctrl_of_pie', 'cnq_of_pie', 'r_ctrl_of_pie', 'r_cote_of_pie', 'num_cc_of_pie', 'ind_gam_of', 'service_of_pie', 'ccf_of_pie', 'ccfc_of_pie', 'coef_px_of_pie', 'flag_cli_of_pie', 'qte_asortie_of_pie', 'cmpt_retouch_of_pie', 'Pour_Stock', 'Qte_Achat_Facturee', 'Cout_Reel_PF_Stock', 'Indice_Taux', 'ManquantElimine', 'Piece_Deja_Solde', 'Poucentage_Rebut', 'Qte_Retournee', 'Piece_Ponctuelle', 'Besoin_Reel_MProject','Date_Controleur', 'Opt_Variante', 'Opt_Var_Matiere', 'Qte_inc_PMA', 'Prix_inc_PMA', 'Action_Corrective', 'Mise_Histo_EDI', 'Modif_Qte_OF_Elt', 'Plan_Piece', 'Version_Piece', 'Mrp', 'OF_Montage_Mrp', 'Reserve_Sur_AFFStk', 'Reserve_Sur_OFStk', 'Qte_Reserve_AFFStk','Draw_Dir', 'Draw_Dir2', 'date_Besoin', 'imput', 'Maj_nome', 'Top_ID_Besoin', 'ID_Stock_In', 'Option', 'Qte_deja_affecte', 'Surplus_Affecte', 'of_imb', 'multiple', 'EDI', 'Piece_Client', 'Surplus', 'Modification', 'OF_de_Reservation','qte_fact_of_pie', 'cc_of_pie', 'qte_stk_of_pie', 'user_of_pie','etap_ann_of_pie', 'etap_lanc_of_pie', 'etap_annul_lancofpie','plan_gam_nom','geler_pie', 'sold_pie', 'projet_nom', 'id_gam_mnt_mp_nom', 'Dummy_NOM','version_gam_nom','classe_qualite_nom', 'transit_nom', 'multi_process_nom', 'date_maj_nom', 'PMP_Initial','silhouette_nom', 'sys_of_pie', 'Debut_Planif', 'Fin_Planif', 'PMV_Initial','TEDI', 'NonUtilise', 'NonUtilise1', 'Dummu','dummy','temps_restant', 'temps_passe_autres1', 'temps_passe_autres2','fin_planif_of','type_op','type_ressource','code_ressource','silhou_op','commentaire_op','outil_op','dessin_op','bon_edit_op','cc_op','r_ctrl_op','r_cote_op','chpj_op','chdj_op','coef_px_op','type_element_op','Qte_Facture','Manquant_Eliminer','Facture_theorique','User_do_Reserve','Flag_Reserve','User_Do_Lance','Flag_Lance','Finger','Indice','Conv_Euro','Regroupe','Draw_dir','Desconhecido','Top_ID','Dummy_op'],axis=1)
+
+df['quant_fin'] = df['qte_term_pie'].div(df['besoin_of_pie'].values)
+df['chave'] = np.random.randint(1,99999999, size=len(df))
+
+df = df.fillna('')
+df = df[~df.isin([np.nan, np.inf, -np.inf]).any(1)]
+
+for i in df['quant_fin'].values:
+    print(i)
+
+tabela = []
+
+for coluna in df.columns:
+    tabela.append(coluna)
+print(tabela)
+
+conn.close()
+
+print("Alimentando o drive...")
+
+# LOCALIZAÇÃO DA PLANILHA APONTAMENTOS EM ABERTO
+gs = gspread.service_account('service_account.json')
+sh = gs.open_by_url("https://docs.google.com/spreadsheets/d/******")
+
+# PLANILHA DO DRIVE
+worksheet = sh.worksheet("OP")
+val = worksheet.range('A:AZ')
+worksheet.batch_clear(['A:BC'])
+worksheet.update([df.columns.values.tolist()] + df.values.tolist(),value_input_option='USER_ENTERED')
+print("Processo finalizado com Sucesso!")
+
