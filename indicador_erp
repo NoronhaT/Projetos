@@ -1,0 +1,163 @@
+import jaydebeapi
+import pandas as pd
+import numpy as np
+from datetime import datetime
+import gspread
+
+
+pervasive_driver ="pervasive_jdbc.jar"
+conn = jaydebeapi.connect("com.pervasive.jdbc.v2.Driver", "jdbc:pervasive://********",
+                          {"user": "usuario", "password": "usuario"}, pervasive_driver)
+curs = conn.cursor()
+curs.execute(
+    "select code_ressource_op, piece_op,Num_Bon, Num_Affaire,of_op, num_op, qt_term_op, Date_Debut, Operateur, Date_Debut,Sec_cent_Debut, H_min_Debut, Id_Multi_Bon, code_ressource_op, temps_usinage, temps_reglage from of_phase2 A inner join sca B on A.Num_Bon = B.Bon")
+
+# DADOS DE ORDEM DE FABRICAÇÃO
+
+df = pd.DataFrame(curs.fetchall(),
+                  columns=['recurso_op', 'produto_op', 'numero_ficha', 'numero_Pedido', 'item_op', 'numero_operacao',
+                           'quantidade_terminada',
+                           'data_inicio', 'operador', 'Data', 'Segundos_hm', 'Hora_minuto', 'Multificha', 'Recurso',
+                           'peca_por_hora', 'tempo_setup'])
+
+df.Hora_minuto = pd.to_numeric(df.Hora_minuto, errors='coerce').fillna(0).astype(np.int64)
+df.Segundos_hm = pd.to_numeric(df.Segundos_hm, errors='coerce').fillna(0).astype(np.int64)
+df.quantidade_terminada = pd.to_numeric(df.quantidade_terminada, errors='coerce').fillna(0).astype(np.int64)
+
+# Definindo horas_minutos
+new_df = df.assign(Hora_Conv=lambda x: x.Hora_minuto / 256)
+new_df_dois = new_df.assign(Minutos_Conv=lambda x: x.Hora_Conv)
+new_df_dois.Hora_Conv = new_df_dois['Hora_Conv'].astype(int)
+new_df_tres = new_df_dois.assign(Minutos_Dec=lambda x: (x.Minutos_Conv - x.Hora_Conv) * 256)
+new_df_tres.Minutos_Dec = new_df_tres['Minutos_Dec'].astype(int)
+
+# Definindo segundos
+
+df_format = new_df_tres.assign(Segundos_Conv=lambda x: x.Segundos_hm / 16777216)
+df_format.Segundos_Conv = df_format['Segundos_Conv'].astype(int)
+df_format.Hora_Conv = df_format.Hora_Conv.astype(str)
+df_format.Minutos_Dec = df_format.Minutos_Dec.astype(str)
+df_format.Segundos_Conv = df_format.Segundos_Conv.astype(str)
+
+# Criando coluna de tempo calculado:
+
+df_format = df_format.assign(Hora_Prod=df_format[
+                                           'Data'] + ' ' + df_format.Hora_Conv + ':' + df_format.Minutos_Dec + ':' + df_format.Segundos_Conv)
+df_format['Hora_Prod'] = pd.to_datetime(df_format['Hora_Prod'], format='%Y/%m/%d %H:%M:%S')
+df_format = df_format.drop(
+    columns=['Segundos_Conv', 'Hora_Conv', 'Minutos_Dec', 'Minutos_Conv', 'Segundos_hm', 'Hora_minuto'])
+
+# SEMPRE FECHAR CONEXAO COM O BANCO
+conn.close()
+
+# criação de colunas adicionais para avaliar tempo da produção
+df_format['tempo_agora'] = datetime.now()
+df_format['tempo_corrido'] = df_format['tempo_agora'] - df_format['Hora_Prod']
+
+# converte os resultados da coluna tempo corrido de nanosegundos para minutos
+# valor / 60.000.000.000
+
+df_format = df_format.assign(tempo_minuto=lambda x: (x['tempo_corrido'] / 60000000000))
+# muda de deltatime64 para str
+df_format['tempo_minuto'] = df_format['tempo_minuto'].astype('timedelta64[ns]').astype(str)
+# remove a formatação de tempo para utilizar os números de resultado
+df_format['tempo_minuto'] = df_format['tempo_minuto'].map(lambda x: x.lstrip('0 days 00:00:00.'))
+# devolve o valor em str para int
+df_format['tempo_minuto'] = df_format['tempo_minuto'].astype(float).astype(int)
+# divide a quantidade por hora de peças por 60 para encontrar a taxa minuto da peça padrão
+df_format['taxa_minuto_peca'] = df_format['peca_por_hora'].div(60)
+# divide o tempo corrido em minutos pelo tempo minuto da peça, para encontrar a quantidade peças ideal ao horário
+df_format['quantidade_ideal'] = df_format['tempo_minuto']* (df_format['taxa_minuto_peca'])
+
+# precisa alterar os tipos float para str para ser aceito pelo JSON
+
+
+df_format['peca_por_hora'] = df_format['peca_por_hora'].astype(str)
+df_format['tempo_setup'] = df_format['tempo_setup'].astype(str)
+df_format['Hora_Prod'] = df_format['Hora_Prod'].astype(str)
+df_format['tempo_agora'] = df_format['tempo_agora'].astype(str)
+df_format['taxa_minuto_peca'] = df_format['taxa_minuto_peca'].astype(str)
+df_format['quantidade_ideal'] = df_format['quantidade_ideal'].astype(str)
+df_format['tempo_corrido'] = df_format['tempo_corrido'].astype(str)
+
+
+
+print(df_format.head())
+
+
+# APONTAMENTOS EM ANDAMENTO
+
+conn_dois = jaydebeapi.connect("com.pervasive.jdbc.v2.Driver", "jdbc:pervasive://rhwt002s:1583/RHOWERTAUX",
+                               {"user": "usuario", "password": "usuario"}, "pervasive_jdbc.jar")
+curs = conn_dois.cursor()
+curs.execute(
+    "SELECT Num_Bon, Tps_Passe_Reglage, Tps_passe_Usin,Qte_Terminee, Date_Inicio, cd_projeto,cd_of,cd_id_of, cd_fase, pecas_hora_previsto, cd_produto,ds_produto FROM STP2")
+df_dois = pd.DataFrame(curs.fetchall(),
+                       columns=['numero_ficha', 'tempo_setup', 'tempo_producao', 'quantidade_terminada', 'data_inicio',
+                                'numero_projeto', 'codigo_of', 'codigo_id', 'fase', 'pecas_hora_sistema', 'codigo_peca',
+                                'descricao_peca'])
+
+conn_dois.close()
+
+# DEFINIR O QUE É SETUP E O QUE É PRODUCAO
+df_dois['tempo_previsto'] = df_dois['quantidade_terminada'].div(df_dois['pecas_hora_sistema'])
+# remove os apontamentos de setup dos dados
+# df_producao = df_dois.loc[df_dois["tempo_setup"] != 0]
+# DESEMPENHO ENTRE O TEMPO PADRÃO E O REGISTRADO
+df_dois['desempenho'] = df_dois['tempo_previsto'].div(df_dois['tempo_producao'])
+# APRESENTA QUANTIDADE REALIZADA
+df_dois['pecas_por_hora_real'] = df_dois['desempenho'] * (df_dois['pecas_hora_sistema'])
+# ajusta os resultados inf para 0
+df_dois.replace([np.inf, -np.inf], 0, inplace=True)
+df_dois = df_dois.replace(np.nan, 0)
+
+# classifica uma coluna avaliando as metas de desempenho por peças realizadas:
+meta_minima = 0.9
+meta_maxima = 1.1
+
+
+# função que cria o sistema de avaliação:
+
+def condicao(x):
+    if x < meta_minima:
+        return 'Abaixo do esperado'
+    elif x >= meta_minima and x <= meta_maxima:
+        return 'Dentro do esperado'
+    else:
+        return 'Fora do tempo'
+
+# aplica o resultado gerando uma nova coluna com base na condição
+df_dois['Resultados'] = df_dois['desempenho'].apply(condicao)
+
+
+
+#ajusta o tipo float para str para subir no json
+df_dois['tempo_setup'] = df_dois['tempo_setup'].astype(str)
+df_dois['tempo_producao'] = df_dois['tempo_producao'].astype(str)
+df_dois['pecas_hora_sistema'] = df_dois['pecas_hora_sistema'].astype(str)
+df_dois['tempo_previsto'] = df_dois['tempo_previsto'].astype(str)
+df_dois['desempenho'] = df_dois['desempenho'].astype(str)
+df_dois['pecas_por_hora_real'] = df_dois['pecas_por_hora_real'].astype(str)
+
+
+#UNIÃO DOS DOIS DF EM UM UNICO QUE TORNA POSSIVEL AVALIAR ORDENS ATIVAS E ORDENS FINALIZADAS
+df_final = pd.merge(df_format, df_dois, how='outer', on = 'numero_ficha')
+df_final['em_producao'] = df_final['recurso_op'].apply(lambda x: 'EM_PRODUCAO' if x > 0 else 'FINALIZADA')
+df_final = df_final.fillna('')
+
+
+print(df_final.head())
+
+
+print("Alimentando o drive...")
+
+# LOCALIZAÇÃO DA PLANILHA APONTAMENTOS EM ABERTO
+gs = gspread.service_account('service_account.json')
+sh = gs.open_by_url("https://docs.google.com/spreadsheets/d/*******")
+
+# PLANILHA DO DRIVE
+worksheet = sh.worksheet("apontamentos_em_aberto")
+val = worksheet.range('A:AZ')
+worksheet.batch_clear(['A:AZ'])
+worksheet.update([df_final.columns.values.tolist()] + df_final.values.tolist(),value_input_option='USER_ENTERED')
+
